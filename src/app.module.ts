@@ -3,24 +3,16 @@ import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { RolesGuard } from './common/guards/roles.guard';
 import { validate } from './config/env.validation';
 import { dataSourceOptions } from './database/data-source';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
-    // 1. Load .env and VALIDATE it. The app refuses to start if anything is wrong.
-    ConfigModule.forRoot({
-      isGlobal: true,
-      cache: true,
-      validate,
-    }),
-
-    // 2. Database: reuse the exact same settings as the migration CLI
+    ConfigModule.forRoot({ isGlobal: true, cache: true, validate }),
     TypeOrmModule.forRoot(dataSourceOptions),
-
-    // 3. Rate limiting: max THROTTLE_LIMIT requests per THROTTLE_TTL_SECONDS per client
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => [
@@ -30,12 +22,13 @@ import { AppService } from './app.service';
         },
       ],
     }),
+    AuthModule,
   ],
-  controllers: [AppController],
   providers: [
-    AppService,
-    // Apply rate limiting to EVERY route in the app
+    // Order matters: rate limit -> who are you? -> are you allowed?
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
 export class AppModule {}
