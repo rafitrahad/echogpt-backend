@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsSecurePassword } from '../../../common/validators/secure-password.decorator';
 
 export class RegisterDto {
   @ApiProperty({ example: 'rahim@gmail.com' })
@@ -13,12 +14,7 @@ export class RegisterDto {
     example: 'Rahim@2026',
     description: '8-72 characters, with at least one uppercase letter, one lowercase letter and one number',
   })
-  @IsString()
-  @MinLength(8)
-  @MaxLength(72) // bcrypt only uses the first 72 bytes
-  @Matches(/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, {
-    message: 'password must contain an uppercase letter, a lowercase letter and a number',
-  })
+  @IsSecurePassword()
   password: string;
 
   @ApiPropertyOptional({ example: 'Rahim Uddin' })
