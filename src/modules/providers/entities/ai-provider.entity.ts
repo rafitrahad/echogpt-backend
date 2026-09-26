@@ -1,7 +1,7 @@
-import { Check, Column, Entity, Index } from 'typeorm';
+import { Check, Column, Entity, Index, OneToMany } from 'typeorm';
 import { AbstractEntity } from '../../../common/entities/abstract.entity';
 import { ProviderHealth, ProviderType } from '../../../common/enums';
-
+import { AiModel } from './ai-model.entity';
 @Entity('ai_providers')
 // Database guarantee: at most ONE default provider
 @Index('uq_ai_providers_single_default', ['isDefault'], {
@@ -48,4 +48,7 @@ export class AiProvider extends AbstractEntity {
 
   @Column({ type: 'timestamptz', nullable: true })
   lastHealthCheckAt: Date | null;
+
+    @OneToMany(() => AiModel, (model) => model.provider)
+  models: AiModel[];
 }
