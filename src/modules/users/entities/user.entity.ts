@@ -9,6 +9,7 @@ import {
 import { AbstractEntity } from '../../../common/entities/abstract.entity';
 import { Role } from './role.entity';
 import { Session } from '../../auth/entities/session.entity';
+import { Subscription } from '../../subscriptions/entities/subscription.entity';
 @Entity('users')
 export class User extends AbstractEntity {
   @Column({ type: 'varchar', length: 255, unique: true })
@@ -45,4 +46,6 @@ export class User extends AbstractEntity {
 
     @OneToMany(() => Session, (session) => session.user)
   sessions: Session[];
+    @OneToMany(() => Subscription, (sub) => sub.user)
+  subscriptions: Subscription[];
 }
