@@ -1,8 +1,9 @@
-import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
+import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany } from 'typeorm';
 import { AbstractEntity } from '../../../common/entities/abstract.entity';
 import { User } from '../../users/entities/user.entity';
 import { AiProvider } from '../../providers/entities/ai-provider.entity';
 import { AiModel } from '../../providers/entities/ai-model.entity';
+import { Message } from './message.entity';
 
 /**
  * One chat thread. Messages inside it are stored in the messages table.
@@ -37,4 +38,7 @@ export class Conversation extends AbstractEntity {
   @ManyToOne(() => AiModel, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'model_id' })
   model: AiModel | null;
+
+    @OneToMany(() => Message, (message) => message.conversation)
+  messages: Message[];
 }
