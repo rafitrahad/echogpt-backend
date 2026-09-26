@@ -11,6 +11,8 @@ import { Role } from './role.entity';
 import { Session } from '../../auth/entities/session.entity';
 import { Subscription } from '../../subscriptions/entities/subscription.entity';
 import { Conversation } from '../../chat/entities/conversation.entity';
+import { WebSearch } from '../../search/entities/web-search.entity';
+
 
 
 @Entity('users')
@@ -55,4 +57,7 @@ export class User extends AbstractEntity {
 
     @OneToMany(() => Conversation, (conv) => conv.user)
   conversations: Conversation[];
+
+    @OneToMany(() => WebSearch, (search) => search.user)
+  webSearches: WebSearch[];
 }
