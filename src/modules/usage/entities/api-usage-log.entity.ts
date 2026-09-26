@@ -54,7 +54,7 @@ export class ApiUsageLog {
   userAgent: string | null;
 
   // ── AI-specific details: filled only for chat/search requests ──
-  @Column({ type: 'enum', enum: UsageType, enumName: 'usage_type_enum', nullable: true })
+   @Column({ type: 'enum', enum: UsageType, enumName: 'api_usage_log_type_enum', nullable: true })
   usageType: UsageType | null;
 
   @Column({ type: 'uuid', nullable: true })
