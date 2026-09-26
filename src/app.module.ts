@@ -1,3 +1,5 @@
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
+import { UsageModule } from './modules/usage/usage.module';
 import { UsersModule } from './modules/users/users.module';
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
@@ -25,6 +27,8 @@ import { AuthModule } from './modules/auth/auth.module';
     }),
     AuthModule,
     UsersModule,
+    SubscriptionsModule,
+    UsageModule,
   ],
   providers: [
     // Order matters: rate limit -> who are you? -> are you allowed?
