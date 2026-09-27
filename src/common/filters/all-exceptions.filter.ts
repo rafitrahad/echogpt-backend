@@ -51,7 +51,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       path,
       timestamp: new Date().toISOString(),
     };
-
+        // For the request-logging middleware (safe message only)
+    response.locals.errorMessage = Array.isArray(message) ? message.join('; ') : message;
     response.status(status).json(body);
   }
 
