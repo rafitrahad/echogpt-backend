@@ -3,6 +3,7 @@ import {
   IsEmail,
   IsEnum,
   IsIn,
+  IsUrl,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -112,6 +113,33 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   TAVILY_API_KEY?: string;
+
+    // ── Public URL of this API (used in email links) ──
+  @IsUrl({ require_tld: false, require_protocol: true })
+  APP_URL: string;
+
+  // ── Email (optional: without SMTP_HOST, emails are printed to the console) ──
+  @IsOptional()
+  @IsString()
+  SMTP_HOST?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(65535)
+  SMTP_PORT?: number;
+
+  @IsOptional()
+  @IsString()
+  SMTP_USER?: string;
+
+  @IsOptional()
+  @IsString()
+  SMTP_PASS?: string;
+
+  @IsOptional()
+  @IsString()
+  MAIL_FROM?: string;
 
 }
   

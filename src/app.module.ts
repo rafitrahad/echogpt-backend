@@ -18,6 +18,7 @@ import { SubscriptionsModule } from './modules/subscriptions/subscriptions.modul
 import { ApiUsageLog } from './modules/usage/entities/api-usage-log.entity';
 import { UsageModule } from './modules/usage/usage.module';
 import { UsersModule } from './modules/users/users.module';
+import { MailModule } from './modules/mail/mail.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { UsersModule } from './modules/users/users.module';
     }),
     // Repository for the request-logging middleware
     TypeOrmModule.forFeature([ApiUsageLog]),
+    MailModule,
     AuthModule,
     UsersModule,
     SubscriptionsModule,

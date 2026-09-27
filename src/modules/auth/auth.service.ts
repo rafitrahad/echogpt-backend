@@ -25,6 +25,7 @@ import { AuthResponseDto, AuthTokensDto } from './dto/auth-response.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { Session } from './entities/session.entity';
+import { EmailVerificationService } from './email-verification.service';
 
 /** What we put inside a refresh token */
 interface RefreshPayload {
@@ -47,7 +48,8 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
     @InjectRepository(User) private readonly usersRepo: Repository<User>,
-    @InjectRepository(Session) private readonly sessionsRepo: Repository<Session>,
+        @InjectRepository(Session) private readonly sessionsRepo: Repository<Session>,
+    private readonly emailVerification: EmailVerificationService,
   ) {}
 
   // ─────────────────────────── Register ───────────────────────────
@@ -92,6 +94,9 @@ export class AuthService {
       where: { id: userId },
       relations: { role: true },
     });
+
+        // Not awaited: a slow mail server must not slow down registration
+    void this.emailVerification.sendVerificationEmail(user);
     const tokens = await this.createSession(user, meta);
     return { user: UserResponseDto.fromEntity(user), tokens };
   }
@@ -209,6 +214,8 @@ export class AuthService {
     // Read the real expiry times from the tokens themselves
     const access = this.jwtService.decode<{ iat: number; exp: number }>(accessToken);
     const refresh = this.jwtService.decode<{ exp: number }>(refreshToken);
+
+    
 
     session.refreshTokenHash = sha256(refreshToken);
     session.expiresAt = new Date(refresh.exp * 1000);

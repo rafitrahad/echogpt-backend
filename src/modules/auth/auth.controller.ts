@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Query, Req } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -22,6 +22,8 @@ import { AuthResponseDto, AuthTokensDto } from './dto/auth-response.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterDto } from './dto/register.dto';
+import { MessageResponseDto, VerifyEmailDto } from './dto/verify-email.dto';
+import { EmailVerificationService } from './email-verification.service';
 
 // Stricter limit for sensitive routes: 5 requests per minute
 const STRICT_LIMIT = { default: { limit: 5, ttl: 60_000 } };
@@ -30,7 +32,10 @@ const STRICT_LIMIT = { default: { limit: 5, ttl: 60_000 } };
 @ApiTooManyRequestsResponse({ description: 'Too many requests, slow down' })
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+    constructor(
+    private readonly authService: AuthService,
+    private readonly emailVerification: EmailVerificationService,
+  ) {}
 
   @Public()
   @Throttle(STRICT_LIMIT)
@@ -82,5 +87,40 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
   async logoutAll(@CurrentUser('id') userId: string): Promise<void> {
     await this.authService.revokeAllSessions(userId);
+  }
+
+    // ─────────── Email verification (bonus) ───────────
+
+  @Public()
+  @Get('verify-email')
+  @ApiOperation({ summary: 'Verify email by opening the link from the email (token in the URL)' })
+  @ApiOkResponse({ type: MessageResponseDto })
+  @ApiBadRequestResponse({ description: 'Link invalid, expired or already used' })
+  async verifyEmailLink(@Query() dto: VerifyEmailDto): Promise<MessageResponseDto> {
+    await this.emailVerification.verify(dto.token);
+    return { message: 'Email verified successfully. You can close this page.' };
+  }
+
+  @Public()
+  @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify email with the token (for apps, e.g. the extension)' })
+  @ApiOkResponse({ type: MessageResponseDto })
+  @ApiBadRequestResponse({ description: 'Token invalid, expired or already used' })
+  async verifyEmail(@Body() dto: VerifyEmailDto): Promise<MessageResponseDto> {
+    await this.emailVerification.verify(dto.token);
+    return { message: 'Email verified successfully' };
+  }
+
+  @ApiBearerAuth('access-token')
+  @Throttle(STRICT_LIMIT)
+  @Post('resend-verification')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send a new verification email (older links stop working)' })
+  @ApiOkResponse({ type: MessageResponseDto })
+  @ApiConflictResponse({ description: 'Email already verified' })
+  async resendVerification(@CurrentUser('id') userId: string): Promise<MessageResponseDto> {
+    await this.emailVerification.resend(userId);
+    return { message: 'Verification email sent' };
   }
 }
