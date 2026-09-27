@@ -1,5 +1,5 @@
 import { MessageRole } from '../../../common/enums';
-import { AiAdapter, AiChatRequest, AiChatResult } from './ai-adapter.interface';
+import { AiAdapter, AiChatRequest, AiChatResult, AiStreamChunk } from './ai-adapter.interface';
 
 /**
  * Fake provider for development and review: no network, no API key, no cost.
@@ -21,5 +21,15 @@ export class MockAdapter implements AiAdapter {
       promptTokens: Math.ceil(req.messages.reduce((n, m) => n + m.content.length, 0) / 4),
       completionTokens: Math.ceil(content.length / 4),
     };
+  }
+    /** Streams the mock answer word by word, like a real model */
+  async *stream(req: AiChatRequest, signal?: AbortSignal): AsyncGenerator<AiStreamChunk> {
+    const { content, promptTokens, completionTokens } = await this.chat(req);
+    for (const word of content.split(/(?<= )/)) {
+      if (signal?.aborted) return;
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      yield { type: 'text', text: word };
+    }
+    yield { type: 'usage', promptTokens, completionTokens };
   }
 }

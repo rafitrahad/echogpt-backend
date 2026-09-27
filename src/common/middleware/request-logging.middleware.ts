@@ -21,8 +21,13 @@ export class RequestLoggingMiddleware implements NestMiddleware {
 
   use(req: Request, res: Response, next: NextFunction): void {
     const startedAt = Date.now();
+    let logged = false;
 
-    res.on('finish', () => {
+    // 'finish' = response fully sent. 'close' also covers clients that disconnect early
+    // (e.g. closing a streaming chat). Log exactly once either way.
+    const writeLog = () => {
+      if (logged) return;
+      logged = true;
       const r = req as LoggedRequest;
       const meta = r.usageMeta;
 
@@ -30,8 +35,11 @@ export class RequestLoggingMiddleware implements NestMiddleware {
       const routePattern = (r.route as { path?: string } | undefined)?.path;
       const path = routePattern ? `${r.baseUrl ?? ''}${routePattern}` : r.originalUrl.split('?')[0];
 
-      const errorMessage =
-        res.statusCode >= 400 ? ((res.locals.errorMessage as string | undefined) ?? null) : null;
+      const errorMessage = !res.writableFinished
+        ? 'Client disconnected before the response finished'
+        : res.statusCode >= 400
+          ? ((res.locals.errorMessage as string | undefined) ?? null)
+          : null;
 
       // Fire-and-forget: logging must never slow down or break a response
       this.logsRepo
@@ -52,7 +60,10 @@ export class RequestLoggingMiddleware implements NestMiddleware {
         .catch((error: unknown) => {
           this.logger.warn(`Could not write request log: ${error instanceof Error ? error.message : error}`);
         });
-    });
+    };
+
+    res.on('finish', writeLog);
+    res.on('close', writeLog);
 
     next();
   }

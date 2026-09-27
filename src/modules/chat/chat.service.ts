@@ -7,7 +7,12 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { MessageRole, UsageType } from '../../common/enums';
-import { AiChatMessage, AiChatResult, AiProviderError } from '../providers/adapters/ai-adapter.interface';
+import {
+  AiChatMessage,
+  AiChatRequest,
+  AiChatResult,
+  AiProviderError,
+} from '../providers/adapters/ai-adapter.interface';
 import { ChatTarget, ProvidersService } from '../providers/providers.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { UsageService } from '../usage/usage.service';
@@ -29,6 +34,19 @@ export interface SendMessageResult {
   target: ChatTarget;
 }
 
+/** Events sent to the client while streaming */
+export type ChatStreamEvent =
+  | { type: 'meta'; conversationId: string | null; providerName: string; modelName: string }
+  | { type: 'token'; text: string }
+  | { type: 'done'; result: SendMessageResult };
+
+interface PreparedChat {
+  conversation: Conversation | null;
+  target: ChatTarget;
+  aiMessages: AiChatMessage[];
+  askedAt: Date;
+}
+
 @Injectable()
 export class ChatService {
   private readonly logger = new Logger(ChatService.name);
@@ -45,6 +63,70 @@ export class ChatService {
   // ─────────────────────────── Send a prompt ───────────────────────────
 
   async sendMessage(userId: string, dto: SendMessageDto): Promise<SendMessageResult> {
+    const prepared = await this.prepare(userId, dto);
+    const { target } = prepared;
+
+    // Ask the AI. If it fails, give the request back.
+    let answer: AiChatResult;
+    try {
+      answer = await target.adapter.chat(this.aiRequest(prepared));
+    } catch (error) {
+      return this.handleAiFailure(userId, target, error);
+    }
+    return this.persist(userId, dto, prepared, answer, new Date());
+  }
+
+  /**
+   * Streaming version (bonus): yields the answer piece by piece.
+   * Errors BEFORE the first event (not found, 403, 429...) are normal HTTP errors.
+   * The chat is saved only when the whole answer has arrived.
+   */
+  async *streamMessage(
+    userId: string,
+    dto: SendMessageDto,
+    signal: AbortSignal,
+  ): AsyncGenerator<ChatStreamEvent> {
+    const prepared = await this.prepare(userId, dto);
+    const { target } = prepared;
+
+    yield {
+      type: 'meta',
+      conversationId: prepared.conversation?.id ?? null,
+      providerName: target.provider.name,
+      modelName: target.model.displayName,
+    };
+
+    let content = '';
+    let promptTokens: number | null = null;
+    let completionTokens: number | null = null;
+    try {
+      for await (const chunk of target.adapter.stream(this.aiRequest(prepared), signal)) {
+        if (chunk.type === 'text') {
+          content += chunk.text;
+          yield { type: 'token', text: chunk.text };
+        } else {
+          promptTokens = chunk.promptTokens;
+          completionTokens = chunk.completionTokens;
+        }
+      }
+      if (signal.aborted) throw new AiProviderError('Client disconnected');
+      if (!content) throw new AiProviderError(`${target.provider.name} returned an empty response`);
+    } catch (error) {
+      await this.handleAiFailure(userId, target, error);
+    }
+
+    const result = await this.persist(
+      userId,
+      dto,
+      prepared,
+      { content, promptTokens, completionTokens },
+      new Date(),
+    );
+    yield { type: 'done', result };
+  }
+
+  /** Steps shared by normal and streaming chat: ownership, AI choice, usage, context */
+  private async prepare(userId: string, dto: SendMessageDto): Promise<PreparedChat> {
     // 1. Existing chat? It must belong to THIS user (IDOR protection)
     const conversation = dto.conversationId
       ? await this.findOwnedConversationOrFail(userId, dto.conversationId)
@@ -56,7 +138,7 @@ export class ChatService {
     // 3. Use one request from today's limit (429 if none left)
     await this.usageService.consume(userId, UsageType.CHAT);
 
-    // 4. Ask the AI. If it fails, give the request back.
+    // 4. Context: system prompt + recent history + the new question
     const history = conversation ? await this.loadHistory(conversation.id) : [];
     const aiMessages: AiChatMessage[] = [
       { role: MessageRole.SYSTEM, content: SYSTEM_PROMPT },
@@ -64,29 +146,42 @@ export class ChatService {
       { role: MessageRole.USER, content: dto.prompt },
     ];
 
-    const askedAt = new Date();
-    let answer: AiChatResult;
-    try {
-      answer = await target.adapter.chat({
-        apiKey: target.apiKey,
-        baseUrl: target.provider.baseUrl,
-        model: target.model.modelKey,
-        messages: aiMessages,
-        maxTokens: target.model.maxTokens,
-      });
-    } catch (error) {
-      await this.usageService.refund(userId, UsageType.CHAT);
-      if (error instanceof AiProviderError) {
-        this.logger.warn(`AI call failed (${target.provider.name}): ${error.message}`);
-        throw new BadGatewayException(
-          `${target.provider.name} did not respond. Please try again or choose another provider.`,
-        );
-      }
-      throw error;
-    }
-    const answeredAt = new Date();
+    return { conversation, target, aiMessages, askedAt: new Date() };
+  }
 
-    // 5. Save everything together: the chat, the question and the answer
+  private aiRequest(prepared: PreparedChat): AiChatRequest {
+    const { target } = prepared;
+    return {
+      apiKey: target.apiKey,
+      baseUrl: target.provider.baseUrl,
+      model: target.model.modelKey,
+      messages: prepared.aiMessages,
+      maxTokens: target.model.maxTokens,
+    };
+  }
+
+  /** The AI failed: give the request back and turn the error into a clear 502 */
+  private async handleAiFailure(userId: string, target: ChatTarget, error: unknown): Promise<never> {
+    await this.usageService.refund(userId, UsageType.CHAT);
+    if (error instanceof AiProviderError) {
+      this.logger.warn(`AI call failed (${target.provider.name}): ${error.message}`);
+      throw new BadGatewayException(
+        `${target.provider.name} did not respond. Please try again or choose another provider.`,
+      );
+    }
+    throw error;
+  }
+
+  /** Save everything together: the chat, the question and the answer */
+  private persist(
+    userId: string,
+    dto: SendMessageDto,
+    prepared: PreparedChat,
+    answer: AiChatResult,
+    answeredAt: Date,
+  ): Promise<SendMessageResult> {
+    const { conversation, target, askedAt } = prepared;
+
     return this.dataSource.transaction(async (manager) => {
       const chat =
         conversation ??
