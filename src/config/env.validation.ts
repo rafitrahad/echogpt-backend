@@ -104,6 +104,15 @@ class EnvironmentVariables {
   @IsIn(['true', 'false'])
   AI_MOCK_MODE?: string;
 
+    // ── Web search engine: wikipedia (free), tavily (needs key) or mock ──
+  @IsOptional()
+  @IsIn(['wikipedia', 'tavily', 'mock'])
+  SEARCH_PROVIDER?: string;
+
+  @IsOptional()
+  @IsString()
+  TAVILY_API_KEY?: string;
+
 }
   
 /**

@@ -12,6 +12,9 @@ import { validate } from './config/env.validation';
 import { dataSourceOptions } from './database/data-source';
 import { AuthModule } from './modules/auth/auth.module';
 import { ProvidersModule } from './modules/providers/providers.module';
+import { ChatModule } from './modules/chat/chat.module';
+import { SearchModule } from './modules/search/search.module';
+
 
 @Module({
   imports: [
@@ -31,6 +34,8 @@ import { ProvidersModule } from './modules/providers/providers.module';
     SubscriptionsModule,
     UsageModule,
     ProvidersModule,
+    ChatModule,
+   SearchModule,
   ],
   providers: [
     // Order matters: rate limit -> who are you? -> are you allowed?
