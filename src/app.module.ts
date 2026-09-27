@@ -11,6 +11,7 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { validate } from './config/env.validation';
 import { dataSourceOptions } from './database/data-source';
 import { AuthModule } from './modules/auth/auth.module';
+import { ProvidersModule } from './modules/providers/providers.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { AuthModule } from './modules/auth/auth.module';
     UsersModule,
     SubscriptionsModule,
     UsageModule,
+    ProvidersModule,
   ],
   providers: [
     // Order matters: rate limit -> who are you? -> are you allowed?

@@ -98,8 +98,14 @@ class EnvironmentVariables {
   @IsInt()
   @Min(0)
   SEARCH_CACHE_TTL_SECONDS: number;
-}
 
+  // ── AI: true = fake answers, no API keys needed ──
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  AI_MOCK_MODE?: string;
+
+}
+  
 /**
  * Called by NestJS's ConfigModule at startup with everything from .env.
  * Returns the validated (and type-converted) config, or throws.
